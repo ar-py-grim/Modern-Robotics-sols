@@ -28,6 +28,7 @@ class RobotGeometry:
     def T_sb(q):
         """configuration of the frame `{b}` of the mobile base, relative to the frame `{s}` on the floor.
         Space frame to chassis frame"""
+
         phi = q[0]
         x = q[1]
         y = q[2]
@@ -49,7 +50,7 @@ class RobotGeometry:
             [0, 0, 1, 0.0026],
             [0, 0, 0, 1]])
 
-    # home configuration of robot (all joint angles are zero)
+    # home configuration of end-effector of robot in the `{0}` frame (base of the arm)
     M_0_e = np.array([
         [1, 0, 0, 0.033],
         [0, 1, 0, 0],
@@ -58,12 +59,12 @@ class RobotGeometry:
     ])
 
     # List of screw axes of robot
-    Blist = np.array([
-        [0, 0, 1, 0, 0.033, 0],
-        [0, -1, 0, -0.5076, 0, 0],
-        [0, -1, 0, -0.3526, 0, 0],
-        [0, -1, 0, -0.2176, 0, 0],
-        [0, 0, 1, 0, 0, 0],
+    Blist = np.array([            
+        [0, 0, 1, 0, 0.033, 0],     # J1
+        [0, -1, 0, -0.5076, 0, 0],  # J2          
+        [0, -1, 0, -0.3526, 0, 0],  # J3
+        [0, -1, 0, -0.2176, 0, 0],  # J4
+        [0, 0, 1, 0, 0, 0],         # J5
     ]).T
 
 
@@ -77,23 +78,28 @@ class RobotConfiguration:
 
     def as_array(self):
         """Get the configuration as a Numpy array for calculations"""
+
         return self.configuration
 
     def set_gripper(self, gripper):
         """Set the gripper value (closed: 1, opened: 0)"""
+
         self.configuration[12] = gripper
 
     def get_chassis_config(self):
         """Get the chassis configuration (phi, x, y) from the state"""
+
         assert len(self.configuration) == 13
         return self.configuration[:3]
 
     def joint_angles(self):
         """Get the arm joint angles (J1, ..., J5)"""
+
         return self.configuration[3:8]
 
     def get_angles(self):
         """Get all the joint and wheel angles (J1, ..., J5, W1, ..., W4) from the state"""
+
         assert len(self.configuration) == 13
         return self.configuration[3:12]
 
@@ -103,6 +109,7 @@ class Scene:
     @staticmethod
     def T_sc_initial():
         """Initial configuration of the cube `{c}` relative to the fixed frame `{s}`"""
+
         return np.array([
             [1, 0, 0, 1],
             [0, 1, 0, 0],
@@ -112,6 +119,7 @@ class Scene:
     @staticmethod
     def T_sc_goal():
         """Goal configuration of the cube `{c}` relative to the fixed frame `{s}`"""
+
         return np.array([
             [0, 1, 0, 0],
             [-1, 0, 0, -1],
@@ -121,11 +129,12 @@ class Scene:
 
 class SceneNewTask:
     """A second scene with another starting and goal position of the cube"""
-    # Initial x = 1, y = 1
-    # Goal    x = 1, y = -1
+    # Initial: x = 1, y = 1
+    # Goal:    x = 1, y = -1
     @staticmethod
     def T_sc_initial():
         """Initial configuration of the cube `{c}` relative to the fixed frame `{s}`"""
+
         return np.array([
             [1, 0, 0, 1],
             [0, 1, 0, 1],
@@ -135,6 +144,7 @@ class SceneNewTask:
     @staticmethod
     def T_sc_goal():
         """Goal configuration of the cube `{c}` relative to the fixed frame `{s}`"""
+
         return np.array([
             [0, 1, 0, 1],
             [-1, 0, 0, -1],
@@ -142,7 +152,7 @@ class SceneNewTask:
             [0, 0, 0, 1]])
 
 
-class Planner:  # pylint: disable=too-few-public-methods
+class Planner:
     """Plan the trajectory"""
 
     def __init__(self, T_s_e_initial, scene: Scene, delta_t):
@@ -150,6 +160,7 @@ class Planner:  # pylint: disable=too-few-public-methods
         :param T_se_initial: the initial position of the end effector
         :param scene: the initial and goal position of the cube to be picked
         """
+
         self.T_s_e_initial = T_s_e_initial
         self.T_sc_initial = scene.T_sc_initial()
         self.T_sc_goal = scene.T_sc_goal()
@@ -162,13 +173,10 @@ class Planner:  # pylint: disable=too-few-public-methods
 
         waypoints = self._generate_waypoints()
         traj = []
-        for i in range(len(waypoints) - 1):
+        for i in range(len(waypoints)-1):
             waypoint_from, _, _ = waypoints[i]
-            waypoint_to, gripper, time = waypoints[i + 1]
-            tr = self._generate_trajectory(waypoint_from,
-                                      waypoint_to,
-                                      gripper,
-                                      time)
+            waypoint_to, gripper, time = waypoints[i+1]
+            tr = self._generate_trajectory(waypoint_from, waypoint_to, gripper, time)
             traj.extend(tr)
 
         return traj
@@ -177,10 +185,10 @@ class Planner:  # pylint: disable=too-few-public-methods
         """Generate all the main positions of the end-effector including gripper state and times
         required for the step
         :return: The waypoint positions for the trajectory"""
+
         GRIPPER_OPEN = 0
         GRIPPER_CLOSED = 1
         _ = "unused"
-
         standoff_1 = self._standoff_from_cube(self.T_sc_initial)
         grip_1 = self._grasp_from_cube(self.T_sc_initial)
         standoff_2 = self._standoff_from_cube(self.T_sc_goal)
@@ -210,7 +218,8 @@ class Planner:  # pylint: disable=too-few-public-methods
         :param time_in_s: time for the trajectory segment
         :return: Calculated trajectory segment
         """
-        N = time_in_s / self.delta_t
+
+        N = time_in_s/self.delta_t
         trajectory = ScrewTrajectory(X_from, X_to, time_in_s, N, 3)
 
         t = []
@@ -226,6 +235,7 @@ class Planner:  # pylint: disable=too-few-public-methods
     @staticmethod
     def _standoff_from_cube(cube_conf):
         """End effector standoff configuration, relative to cube frame `{c}`"""
+
         theta = 2
         d = 0.2
         standoff = np.array([
@@ -240,8 +250,8 @@ class Planner:  # pylint: disable=too-few-public-methods
     @staticmethod
     def _grasp_from_cube(cube_config):
         """End effector configuration for grasping cube, relative to cube frame `{c}`"""
-        theta = 2
 
+        theta = 2
         grasp = np.array([
             [np.cos(theta), 0, np.sin(theta), 0],
             [0, 1, 0, 0],
@@ -251,8 +261,9 @@ class Planner:  # pylint: disable=too-few-public-methods
         return cube_config @ grasp
 
 
-class Controller:  # pylint: disable=too-few-public-methods
+class Controller: 
     """The PI control algorithm"""
+
     def __init__(self, robot_geometry, k_p, k_i, delta_t):
         self.robot_geometry = robot_geometry
         self.k_p = k_p
@@ -263,7 +274,8 @@ class Controller:  # pylint: disable=too-few-public-methods
     @staticmethod
     def _euler_step(angles, speeds, delta_t):
         """Calculate new angles of joints and wheels for a time step"""
-        return angles + speeds * delta_t
+
+        return angles + speeds*delta_t
 
     def _next_state(self,current_configuration: RobotConfiguration,
                     wheel_and_joint_controls,speed_max: float) -> RobotConfiguration:
@@ -290,8 +302,8 @@ class Controller:  # pylint: disable=too-few-public-methods
         assert len(new_angles) == 9
         # config
         current_config = current_configuration.get_chassis_config()
-                                                            # dtheta = omega*dt
-        new_configuration = self._odometry(current_config, controls[5:] * self.delta_t)
+                                                              # dtheta = omega*dt
+        new_configuration = self._odometry(current_config, controls[5:]*self.delta_t)
         assert len(new_configuration) == 3
 
         default_gripper = 0.0
@@ -308,12 +320,15 @@ class Controller:  # pylint: disable=too-few-public-methods
         r = self.robot_geometry.r
         l = self.robot_geometry.l
         width = self.robot_geometry.width
-        H_0 = 1 / r * np.array([[-l - width, 1, -1],
-                                [l + width, 1, 1],
-                                [l + width, 1, -1],
-                                [-l - width, 1, 1],
-                                ])
+        H_0 = 1/r * np.array([[-l-width, 1, -1],
+                              [l+width, 1, 1],
+                              [l+width, 1, -1],
+                              [-l-width, 1, 1],
+                            ])
         # calculate twist
+        # angular velocity = H(0)*V_b = delta_theta/delta_t 
+        # V_b = pinv(H_0)*delta_theta/delta_t and since delta_theta is already multiplied by delta_t 
+        # in the controller loop, we can directly use delta_theta here 
         V_b = np.dot(scipy.linalg.pinv(H_0, atol=0.0001), delta_theta.T)
 
         # elements of the twist
@@ -326,9 +341,9 @@ class Controller:  # pylint: disable=too-few-public-methods
             delta_qb = V_b
         else:
             delta_qb = np.array([width_bz,
-                                 (v_bx * np.sin(width_bz) + v_by * (np.cos(width_bz) - 1)) / width_bz,
-                                 (v_by * np.sin(width_bz) + v_bx * (1 - np.cos(width_bz))) / width_bz,
-                                 ])
+                                 (v_bx*np.sin(width_bz) + v_by*(np.cos(width_bz)-1))/width_bz,
+                                 (v_by*np.sin(width_bz) + v_bx*(1-np.cos(width_bz)))/width_bz,
+                            ])
 
         # transforming from {b} to {s}
         phi_k = q_k[0]
@@ -342,6 +357,7 @@ class Controller:  # pylint: disable=too-few-public-methods
 
     def _calc_J_base(self, config: RobotConfiguration):
         """Calculate Jacobian of the base"""
+
         # J_base
         joint_angles = config.joint_angles()
         T_0_e = FKinBody(self.robot_geometry.M_0_e, self.robot_geometry.Blist, joint_angles)
@@ -349,8 +365,8 @@ class Controller:  # pylint: disable=too-few-public-methods
         r = self.robot_geometry.r
         l = self.robot_geometry.l
         width = self.robot_geometry.width
-        F = (r / 4) * np.array([
-            [-1 / (l + width), 1 / (l + width), 1 / (l + width), -1 / (l + width)],
+        F = (r/4) * np.array([
+            [-1/(l+width), 1/(l+width), 1/(l+width), -1/(l+width)],
             [1, 1, 1, 1],
             [-1, 1, -1, 1]])
         m = F.shape[1]
@@ -361,6 +377,7 @@ class Controller:  # pylint: disable=too-few-public-methods
 
     def _calc_J_arm(self, config: RobotConfiguration):
         """Calculate Jacobian of the arm"""
+
         joint_angles = config.joint_angles()
         # Body Jacobian (J_b)
         J_arm = JacobianBody(self.robot_geometry.Blist, joint_angles)
@@ -368,6 +385,7 @@ class Controller:  # pylint: disable=too-few-public-methods
 
     def _calc_J_e(self, config: RobotConfiguration):
         """Calculate Jacobian of the robot"""
+
         J_base = self._calc_J_base(config)
         J_arm = self._calc_J_arm(config)
         J_e = np.concatenate((J_arm, J_base), axis=1)
@@ -379,16 +397,17 @@ class Controller:  # pylint: disable=too-few-public-methods
         :param X_d: Desired configuration of the end-effector (also written T_se_d)
         :param X_d_next: Desired configuration of the end-effector at next timestep (also written T_se_d_next)
         :return: The calculated twist for the PD controller"""
-        K_p = self.k_p * np.eye(6)
-        K_i = self.k_i * np.eye(6)
 
-        V_d = se3ToVec(MatrixLog6(TransInv(X_d) @ X_d_next) / self.delta_t)
+        K_p = self.k_p*np.eye(6)
+        K_i = self.k_i*np.eye(6)
+
+        V_d = se3ToVec(MatrixLog6(TransInv(X_d) @ X_d_next)/self.delta_t)
 
         # error twist form X to X_d
         X_err = se3ToVec(MatrixLog6(TransInv(X) @ X_d))
 
         # Integral (I) part
-        self.integral_X_err += (X_err * self.delta_t)
+        self.integral_X_err+= (X_err*self.delta_t)
 
         adj_x_inv_x_d = Adjoint(TransInv(X) @ X_d)
         adj_x_inv_x_d_V_d = adj_x_inv_x_d @ V_d
@@ -397,7 +416,7 @@ class Controller:  # pylint: disable=too-few-public-methods
 
         return V, X_err
 
-    def _feedback_control_step(self,X,X_d,X_d_next,config: RobotConfiguration):  # pylint: disable=too-many-arguments
+    def _feedback_control_step(self,X,X_d,X_d_next,config: RobotConfiguration):
         """One step of the control algorithm
         :param X: Current position of end-effector
         :param X_d: Desired position of end-effector
@@ -405,10 +424,9 @@ class Controller:  # pylint: disable=too-few-public-methods
         :param config: Configuration of the robot
         :return: tuple of controls and the error
         """
+
         V, X_err = self._calc_V(X, X_d, X_d_next)
         J_e = self._calc_J_e(config)
-        # matrix_inv = scipy.linalg.pinv(J_e, atol=0.0001)
-        # J_e_pinv = matrix_inv
         J_e_pinv = scipy.linalg.pinv(J_e, atol=0.0001)
         controls = J_e_pinv @ V
 
@@ -417,10 +435,10 @@ class Controller:  # pylint: disable=too-few-public-methods
     @staticmethod
     def _to_SE3(waypoint):
         """Converts a trajectory waypoint to a SE3 matrix"""
+
         assert len(waypoint) == 12
         r = waypoint[0:9].reshape((3, 3))
         p = waypoint[9:12]
-
         t = np.c_[r, p]
         t = np.vstack((t, np.array([0, 0, 0, 1])))
 
@@ -430,6 +448,7 @@ class Controller:  # pylint: disable=too-few-public-methods
         """Calculates the end-effector position from the robot configuration
         :param config: the robot configuration
         :return: the end-effector position"""
+
         # transform from space frame {s} to the body frame {b}
         T_s_b = self.robot_geometry.T_sb(config.get_chassis_config())
         joint_angles = config.joint_angles()
@@ -444,6 +463,7 @@ class Controller:  # pylint: disable=too-few-public-methods
         :param config: The configuration of the robot
         :param trajectory: The calculated trajectory for the end-effector
         :return: list of all configurations for the task, list of all error"""
+
         all_configurations = np.array([config.as_array()])
         all_X_err = []
         X = self._end_effector_from_config(config)
@@ -474,26 +494,28 @@ class Controller:  # pylint: disable=too-few-public-methods
 
 
 class Robot:
+    """The robot class which initializes the robot and runs the control loop for a given task"""
     initial_planned_T_s_e = np.array([[0, 0, 1, 0],
                                       [0, 1, 0, 0],
                                       [-1, 0, 0, 0.5],
                                       [0, 0, 0, 1]
-                                      ])
+                                    ])
 
-    initial_config = RobotConfiguration(np.array([np.pi / 4, -0.5, 0.5, 1, -0.2, 0.2, -1.6, 0, 0, 0, 0, 0, 0]))
-
+    initial_config = RobotConfiguration(np.array([np.pi/4, -0.5, 0.5, 1, -0.2, 0.2, -1.6, 0, 0, 0, 0, 0, 0]))
     delta_t = 0.01  # seconds
     robot_geometry = RobotGeometry()
 
     def __init__(self, task):
         """Initialize the robot for the task"""
+
         self.name = task.name
         self.scene = task.scene
         self.control_gains = task.control_gains
         self.output_base_dir = task.output_base_dir()
 
-    def run(self) -> None:  # pylint: disable=too-many-locals
+    def run(self) -> None: 
         """Run the robot to achieve the desired task"""
+
         config: RobotConfiguration = self.initial_config
 
         print(f"Running task '{self.name}' with:")
@@ -510,13 +532,13 @@ class Robot:
                                 self.delta_t)
 
         all_X_err, all_configurations = controller.controller_loop(config, trajectory)
-
         self.write_outputs_to_files(all_X_err, all_configurations)
 
         print("Done.")
 
     def write_outputs_to_files(self, all_X_err, all_configurations):
         """Write all necessary output files to corresponding folders"""
+
         print("Generating animation csv file.")
         os.makedirs(self.output_base_dir, exist_ok=True)
         # File with list of configurations for CoppeliaSim
@@ -530,10 +552,8 @@ class Robot:
         ax.plot(all_X_err)
         fig.savefig(os.path.join(self.output_base_dir, "x_err.png"))
 
-
 # The gains for the PI controller
 ControlGains = namedtuple('ControlGains', ['k_i', 'k_p'])
-
 
 @dataclasses.dataclass
 class Task:
@@ -558,7 +578,7 @@ if __name__ == '__main__':
         robot = Robot(t)
         robot.run()
 
-# Testsing Code #`
+# Testsing Code
 else:
     import os
     from approvaltests import verify_file, Options
@@ -571,7 +591,7 @@ test_task = Task("test", ControlGains(k_p=2, k_i=0.01), Scene(), os.path.join(DI
 
 def get_numpy_comparator():
     from approvaltests.core import Comparator
-    class NumpyComparator(Comparator):  # pylint: disable=too-few-public-methods
+    class NumpyComparator(Comparator):
 
         def __init__(self):
             pass
@@ -581,7 +601,7 @@ def get_numpy_comparator():
                 received = np.loadtxt(received_path, delimiter=',')
                 approved = np.loadtxt(approved_path, delimiter=',')
                 return np.allclose(received, approved)
-            except:  # pylint: disable=bare-except
+            except:
                 return False
     return NumpyComparator()
 
@@ -607,7 +627,7 @@ def test_NextState(name, u):
     current_config.set_gripper(gripper_state)
     all_states = current_config.as_array()
     for _ in range(steps):
-        current_config = controller._next_state(current_config, speeds, 5)  # pylint: disable=protected-access
+        current_config = controller._next_state(current_config, speeds, 5)
         current_config.set_gripper(gripper_state)
         all_states = np.vstack([all_states, current_config.as_array()])
     output_file = os.path.join(DIR_PATH, "test", f"output-{name}.csv")
@@ -623,18 +643,19 @@ X = np.array([
     [-0.985, 0, 0.170, 0.570],
     [0, 0, 0, 1],
 ])
+
 X_d = np.array([
     [0, 0, 1, 0.5],
     [0, 1, 0, 0],
     [-1, 0, 0, 0.5],
     [0, 0, 0, 1]
 ])
+
 X_d_next = np.array([
     [0, 0, 1, 0.6],
     [0, 1, 0, 0],
     [-1, 0, 0, 0.3],
     [0, 0, 0, 1]
-
 ])
 
 config = RobotConfiguration(np.array([0, 0, 0, 0, 0, 0.2, -1.6, 0]))
@@ -645,7 +666,7 @@ def test_calc_V():
     robot.k_i = 0
     controller = Controller(robot_geometry=robot.robot_geometry, k_p=robot.k_p, k_i=robot.k_i,
                             delta_t=robot.delta_t)
-    res, X_err = controller._calc_V(X, X_d, X_d_next)  # pylint: disable=protected-access
+    res, X_err = controller._calc_V(X, X_d, X_d_next)
     expected_V = np.array([0, 0, 0, 21.4, 0, 6.45])
     np.testing.assert_array_almost_equal(res, expected_V)
     np.testing.assert_array_almost_equal(controller.integral_X_err, [0., 0.001709, 0., 0.000795, 0., 0.001067])
@@ -657,7 +678,7 @@ def test_calc_J_e():
                             k_p=robot.control_gains.k_p,
                             k_i=robot.control_gains.k_i,
                             delta_t=robot.delta_t)
-    J_e = controller._calc_J_e(config)  # pylint: disable=protected-access
+    J_e = controller._calc_J_e(config)
     expected = np.array(
         [[-0.98544973, 0, 0., 0., 0., 0.03039537, -0.03039537, -0.03039537, 0.03039537],
          [0., -1., -1., -1., 0., 0., 0., 0., 0.],
@@ -674,7 +695,7 @@ def test_calc_FeedbackControl():
     robot.k_i = 0
     controller = Controller(robot_geometry=robot.robot_geometry, k_p=robot.k_p, k_i=robot.k_i,
                             delta_t=robot.delta_t)
-    controls, X_err = controller._feedback_control_step(X, X_d, X_d_next,config)  # pylint: disable=protected-access
+    controls, X_err = controller._feedback_control_step(X, X_d, X_d_next,config)
     expected = np.array([-1.847390e-13, -6.526204e+02, 1.398037e+03, -7.454164e+02,
                          7.707381e-14, 1.571068e+02, 1.571068e+02, 1.571068e+02,
                          1.571068e+02])
@@ -684,7 +705,7 @@ def test_calc_FeedbackControl():
 
 def test_to_SE3():
     w = np.array([1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11, 12])
-    t = Controller._to_SE3(w)  # pylint: disable=protected-access
+    t = Controller._to_SE3(w)
     np.testing.assert_array_equal(t, np.array([[1, 2, 3, 10],
                                                [4, 5, 6, 11],
                                                [7, 8, 9, 12],
